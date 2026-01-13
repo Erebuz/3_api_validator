@@ -2,14 +2,14 @@ import random
 
 
 def get_score(
-    phone,
-    email,
-    birthday=None,
-    gender=None,
-    first_name=None,
-    last_name=None,
+    phone: str | int,
+    email: str,
+    birthday: str | None = None,
+    gender: int | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
 ) -> float:
-    score = 0
+    score: float = 0
 
     if phone:
         score += 1.5

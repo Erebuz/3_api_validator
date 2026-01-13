@@ -1,9 +1,12 @@
+# mypy: ignore-errors
+
 import datetime
 import functools
 import hashlib
 import unittest
 
 from src import api
+from src.constants import ADMIN_LOGIN, ADMIN_SALT, SALT
 
 
 def cases(cases):
@@ -26,21 +29,13 @@ class TestSuite(unittest.TestCase):
         self.settings = {}
 
     def get_response(self, request):
-        return api.method_handler(
-            {"body": request, "headers": self.headers}, self.context, self.settings
-        )
+        return api.method_handler({"body": request, "headers": self.headers}, self.context, self.settings)
 
     def set_valid_auth(self, request):
-        if request.get("login") == api.ADMIN_LOGIN:
-            request["token"] = hashlib.sha512(
-                (datetime.datetime.now().strftime("%Y%m%d%H") + api.ADMIN_SALT).encode(
-                    "utf-8"
-                )
-            ).hexdigest()
+        if request.get("login") == ADMIN_LOGIN:
+            request["token"] = hashlib.sha512((datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).encode("utf-8")).hexdigest()
         else:
-            msg = (
-                    request.get("account", "") + request.get("login", "") + api.SALT
-            ).encode("utf-8")
+            msg = (request.get("account", "") + request.get("login", "") + SALT).encode("utf-8")
             request["token"] = hashlib.sha512(msg).hexdigest()
 
     def test_empty_request(self):
@@ -234,14 +229,7 @@ class TestSuite(unittest.TestCase):
         response, code = self.get_response(request)
         self.assertEqual(api.OK, code, arguments)
         self.assertEqual(len(arguments["client_ids"]), len(response))
-        self.assertTrue(
-            all(
-                v
-                and isinstance(v, list)
-                and all(isinstance(i, (bytes, str)) for i in v)
-                for v in response.values()
-            )
-        )
+        self.assertTrue(all(v and isinstance(v, list) and all(isinstance(i, (bytes, str)) for i in v) for v in response.values()))
         self.assertEqual(self.context.get("nclients"), len(arguments["client_ids"]))
 
 
