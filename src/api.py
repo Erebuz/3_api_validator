@@ -1,126 +1,81 @@
-import datetime
-import hashlib
 import json
 import logging
 import uuid
 from argparse import ArgumentParser
 from email.message import Message
-from enum import Enum
 from http.server import (
     BaseHTTPRequestHandler,
     HTTPServer,
 )
-from typing import Any, Callable
+from typing import Callable
 
-
-class Gender(Enum):
-    UNKNOWN = 0
-    MALE = 1
-    FEMALE = 2
-
-
-class ErrorMessage(Enum):
-    BAD_REQUEST = "Bad Request"
-    FORBIDDEN = "Forbidden"
-    NOT_FOUND = "Not Found"
-    INVALID_REQUEST = "Invalid Request"
-    INTERNAL_ERROR = "Internal Server Error"
-
-
-SALT = "Otus"
-ADMIN_LOGIN = "admin"
-ADMIN_SALT = "42"
-
-OK = 200
-BAD_REQUEST = 400
-FORBIDDEN = 403
-NOT_FOUND = 404
-INVALID_REQUEST = 422
-INTERNAL_ERROR = 500
-
-
-class CharField:
-    pass
-
-
-class ArgumentsField:
-    pass
-
-
-class EmailField(CharField):
-    pass
-
-
-class PhoneField:
-    pass
-
-
-class DateField:
-    pass
-
-
-class BirthDayField:
-    pass
-
-
-class GenderField:
-    pass
-
-
-class ClientIDsField:
-    pass
-
-
-class ClientsInterestsRequest:
-    client_ids = ClientIDsField(required=True)
-    date = DateField(required=False, nullable=True)
-
-
-class OnlineScoreRequest:
-    first_name = CharField(required=False, nullable=True)
-    last_name = CharField(required=False, nullable=True)
-    email = EmailField(required=False, nullable=True)
-    phone = PhoneField(required=False, nullable=True)
-    birthday = BirthDayField(required=False, nullable=True)
-    gender = GenderField(required=False, nullable=True)
-
-
-class MethodRequest:
-    account = CharField(required=False, nullable=True)
-    login = CharField(required=True, nullable=True)
-    token = CharField(required=True, nullable=True)
-    arguments = ArgumentsField(required=True, nullable=True)
-    method = CharField(required=True, nullable=False)
-
-    @property
-    def is_admin(self) -> bool:
-        return self.login == ADMIN_LOGIN
-
-
-def check_auth(request: MethodRequest) -> bool:
-    if request.is_admin:
-        digest = hashlib.sha512(
-            (datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).encode("utf-8")
-        ).hexdigest()
-    else:
-        digest = hashlib.sha512(
-            (request.account + request.login + SALT).encode("utf-8")
-        ).hexdigest()
-    return digest == request.token
+from src.constants import *
+from src.methods import *
+from src.scoring import get_score, get_interests
 
 
 def method_handler(
     request: dict[str, Any],
     ctx: dict[str, Any],
-) -> tuple[dict[str, Any], int]:
-    response, code = {}, BAD_REQUEST
+    settings: Any = None
+) -> tuple[dict[str, Any] | str, int]:
+    req = MethodRequest()
+    body = request.get('body', None)
+    if not body:
+        return {}, INVALID_REQUEST
+    try:
+        req.method = body.get('method', None)
+        req.arguments = body.get('arguments', None)
+        req.login = body.get('login', None)
+        req.token = body.get('token', None)
+        req.account = body.get('account', None)
+    except ValueError as e:
+        return ErrorMessage.INVALID_REQUEST.value, INVALID_REQUEST
+
+    if not check_auth(req):
+        return ErrorMessage.FORBIDDEN.value, FORBIDDEN
+
+    if req.method == 'online_score':
+        result, has = get_validate_online_score(req.arguments)
+        if isinstance(result, list):
+            response = ', '.join(result)
+            code = INVALID_REQUEST
+        else:
+            if req.is_admin:
+                response = {'score': 42}
+                code = OK
+            else:
+                response = {
+                    'score': get_score(result.phone,
+                                       result.email,
+                                       result.birthday,
+                                       result.gender,
+                                       result.first_name,
+                                       result.last_name)
+                }
+                code = OK
+
+            ctx['has'] = has
+    elif req.method == 'clients_interests':
+        result, nclients = clients_interests_validator(req.arguments)
+        if isinstance(result, list):
+            response = ', '.join(result)
+            code = INVALID_REQUEST
+        else:
+            response = {client_id: get_interests(client_id) for client_id in result.client_ids}
+            code = OK
+        ctx['nclients'] = nclients
+    else:
+        return ErrorMessage.INVALID_REQUEST.value, INVALID_REQUEST
+
     return response, code
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
     router: dict[str, Callable] = {"method": method_handler}
 
-    def get_request_id(self, headers: Message[str, str]) -> str:
+    @staticmethod
+    def get_request_id(headers: Message[str, str]) -> str:
         return headers.get("HTTP_X_REQUEST_ID", uuid.uuid4().hex)
 
     def do_POST(self) -> None:

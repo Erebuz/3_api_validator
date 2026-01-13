@@ -3,7 +3,7 @@ import functools
 import hashlib
 import unittest
 
-import api
+from src import api
 
 
 def cases(cases):
@@ -39,7 +39,7 @@ class TestSuite(unittest.TestCase):
             ).hexdigest()
         else:
             msg = (
-                request.get("account", "") + request.get("login", "") + api.SALT
+                    request.get("account", "") + request.get("login", "") + api.SALT
             ).encode("utf-8")
             request["token"] = hashlib.sha512(msg).hexdigest()
 
