@@ -5,15 +5,20 @@ from email.message import Message
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Callable
 
+from redis.exceptions import ConnectionError as RedisConnectionError
+
 from src.constants import BAD_REQUEST, ERRORS, FORBIDDEN, INTERNAL_ERROR, INVALID_REQUEST, NOT_FOUND, OK, ErrorMessage
 from src.datas import MethodRequest
-from src.methods import check_auth, clients_interests_validator, get_validate_online_score
+from src.methods import check_auth, validate_clients_interests, validate_online_score
 from src.scoring import get_interests, get_score
+from src.store import RedisHandler
 
 
 def method_handler(request: dict[str, Any], ctx: dict[str, Any], settings: Any = None) -> tuple[dict[str, Any] | str, int]:
     req = MethodRequest()
     body = request.get("body", None)
+
+    store = RedisHandler()
 
     response: dict[str, Any] | str | int
     code: int
@@ -33,7 +38,7 @@ def method_handler(request: dict[str, Any], ctx: dict[str, Any], settings: Any =
         return ErrorMessage.FORBIDDEN.value, FORBIDDEN
 
     if req.method == "online_score":
-        result_score, has = get_validate_online_score(req.arguments)
+        result_score, has = validate_online_score(req.arguments)
         if isinstance(result_score, list):
             response = ", ".join(result_score)
             code = INVALID_REQUEST
@@ -43,19 +48,26 @@ def method_handler(request: dict[str, Any], ctx: dict[str, Any], settings: Any =
                 code = OK
             else:
                 response = {
-                    "score": get_score(result_score.phone, result_score.email, result_score.birthday, result_score.gender, result_score.first_name, result_score.last_name)
+                    "score": get_score(
+                        store, result_score.phone, result_score.email, result_score.birthday, result_score.gender, result_score.first_name, result_score.last_name
+                    )
                 }
                 code = OK
 
             ctx["has"] = has
     elif req.method == "clients_interests":
-        result_interests, nclients = clients_interests_validator(req.arguments)
+        result_interests, nclients = validate_clients_interests(req.arguments)
         if isinstance(result_interests, list):
             response = ", ".join(result_interests)
             code = INVALID_REQUEST
         else:
-            response = {client_id: get_interests(client_id) for client_id in result_interests.client_ids}
-            code = OK
+            try:
+                response = {client_id: get_interests(store, client_id) for client_id in result_interests.client_ids}
+                code = OK
+            except RedisConnectionError:
+                response = "Store connection error"
+                code = INTERNAL_ERROR
+
         ctx["nclients"] = nclients
     else:
         return ErrorMessage.INVALID_REQUEST.value, INVALID_REQUEST

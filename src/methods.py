@@ -15,7 +15,7 @@ def check_auth(request: MethodRequest) -> bool:
     return bool(digest == request.token)
 
 
-def get_validate_online_score(arguments: dict[str, Any]) -> tuple[OnlineScoreRequest | list[str], list[str]]:
+def validate_online_score(arguments: dict[str, Any]) -> tuple[OnlineScoreRequest | list[str], list[str]]:
     score = OnlineScoreRequest()
 
     errors = []
@@ -46,7 +46,7 @@ def get_validate_online_score(arguments: dict[str, Any]) -> tuple[OnlineScoreReq
             return ["No couple"], has
 
 
-def clients_interests_validator(arguments: dict[str, Any]) -> tuple[ClientsInterestsRequest | list[str], int]:
+def validate_clients_interests(arguments: dict[str, Any]) -> tuple[ClientsInterestsRequest | list[str], int]:
     interests = ClientsInterestsRequest()
 
     errors = []

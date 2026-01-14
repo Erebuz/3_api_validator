@@ -13,4 +13,4 @@ lint:
 	pre-commit run --all-files --color=never
 
 test:
-	$(PYTHON) ./test.py
+	uv run pytest
