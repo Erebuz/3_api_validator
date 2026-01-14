@@ -13,4 +13,4 @@ lint:
 	pre-commit run --all-files --color=never
 
 test:
-	uv run pytest
+	uv run pytest --cov=. --cov-report=html

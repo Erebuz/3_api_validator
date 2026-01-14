@@ -19,7 +19,7 @@ def get_score(
     store: Store,
     phone: Optional[str] = None,
     email: Optional[str] = None,
-    birthday: Optional[datetime] = None,
+    birthday: Optional[str] = None,
     gender: Optional[int] = None,
     first_name: Optional[str] = None,
     last_name: Optional[str] = None,
